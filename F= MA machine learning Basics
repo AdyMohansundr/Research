@@ -1,0 +1,161 @@
+import pandas as pd
+import numpy as np
+import random
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import cross_val_score
+from sklearn import linear_model
+from sklearn import metrics
+from sklearn import svm
+import math
+from sklearn.linear_model import ElasticNet
+from sklearn.linear_model import TweedieRegressor
+from sklearn.linear_model import MultiTaskLasso, Lasso
+from sklearn.linear_model import OrthogonalMatchingPursuit
+from sklearn.linear_model import LogisticRegression
+from sklearn.datasets import load_digits
+from sklearn.linear_model import Perceptron
+from sklearn.linear_model import PassiveAggressiveClassifier
+from sklearn.linear_model import QuantileRegressor
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import Pipeline
+from sklearn import model_selection, linear_model
+import random
+from sklearn.linear_model import LassoCV
+from prettytable import PrettyTable
+
+
+def model_run(X_train, X_test, y_train, y_test,X,Y,X_val,Y_val):
+  d= 100
+  func_dict = {'Linear': LinearRegression(), 'Bayesian': linear_model.BayesianRidge(), 'Orthoganal':OrthogonalMatchingPursuit(n_nonzero_coefs=3), 'Lasso': linear_model.Lasso(), 'Ridge': linear_model.Ridge(),'LassoLARS': linear_model.LassoLars(), 'ElasticNet':ElasticNet(l1_ratio=0.7)    }
+  model_result_list = []
+  RMSE_C_List = []
+  cross_validation_list = []
+  cv_RMSE_list = []
+  Predictions_Val_List = []
+  Predictions_Val_RMSE_List = []
+  for x in func_dict:# Loops over a dictionary of the models
+    k_fold_object = model_selection.KFold(5, shuffle=True)
+    for index, value in enumerate(alpha_set): # loops over alpha set
+      #calibration
+      alpha_r2c_results = []
+      cross_validation_r2_list = []
+      scoring = {'neg_mean_squared_error': 'neg_mean_squared_error', 'r2': 'r2'} # keys for scoring, just needed it to have multiple scoring.
+      d = alpha_set[index] # during the iteration of alpha set I assign d  the alpha value
+      model = func_dict[x] # assigns the itterated model to model
+      model.alpha = d # assigns alpha to model
+      model.fit(X_train, y_train)
+      predictions = model.predict(X_test)
+      r2_c=metrics.r2_score(y_test, predictions)
+      alpha_r2c_results.append(r2_c)# adds to a generic list where it has all the itterated r2c values
+      #cv
+      results = model_selection.cross_validate(model, X, Y, cv= k_fold_object, scoring=scoring)
+      cv_r2 = results['test_r2'].mean()
+      cv_RMSE = results['test_neg_mean_squared_error'].mean()
+      cross_validation_r2_list.append(cv_r2)
+      g = {x+'cv': round(max(cross_validation_r2_list),3)} # selects the max cv_r2 value
+    if x == 'Linear' or x=='Bayesian' or x=='Orthoganal':
+      e = {x: round(max(alpha_r2c_results),3)}# selects the mac r2c result, alpha is irrelivant because there is no alpha
+    else:
+      e = {x: round(max(alpha_r2c_results),3),'alpha': alpha_r2c_results.index(max(alpha_r2c_results))}# selects the max alpha value
+
+    model_result_list.append(e)
+    cross_validation_list.append(g)
+    #MSE for calibration
+    if x == 'Linear' or x=='Bayesian' or x=='Orthoganal':
+      MSE = np.square(np.subtract(predictions,y_test)).mean()
+      RMSE = math.sqrt(MSE)
+      h= {x+'RMSE': round(RMSE,3)}
+      i= {x + 'CV RMSE': round(cv_RMSE,3)}
+    else:
+      #run the model again by using the best alpha and use that for RMSE
+      model = func_dict[x]
+      d= alpha_r2c_results.index(max(alpha_r2c_results))
+      model.alpha = d
+      predictions = model.predict(X_test)
+      #RMSE Calibration for models with an alpha
+      MSE = np.square(np.subtract(predictions,y_test)).mean()
+      RMSE = math.sqrt(MSE)
+      h= {x+ 'RMSE': round(RMSE,3)}
+      d = cross_validation_r2_list.index(max(cross_validation_r2_list))
+      model.alpha = d
+      predictions_cv = model.predict(X_test)
+      MSE_cv = np.square(np.subtract(predictions_cv,y_test)).mean()
+      RMSE_cv = math.sqrt(MSE_cv)
+      i= {x+ 'CV RMSE': round(RMSE_cv,3)}
+
+    RMSE_C_List.append(h)
+    cv_RMSE_list.append(i)
+    #prediction
+    predictions_val = model.predict(X_val)
+    r2_p=metrics.r2_score(Y_val, predictions_val)
+    #uses alpha(d) defined in cv
+    j = {x+ 'Prediction': round(r2_p,3)}
+    MSE_Val = np.square(np.subtract(Y_val,predictions_val)).mean()
+    RMSE_Val = math.sqrt(MSE_Val)
+    k= {x+' Pre RMSE': round(RMSE_Val,3)}
+    Predictions_Val_List.append(j)
+    Predictions_Val_RMSE_List.append(k)
+  return (model_result_list, RMSE_C_List, cross_validation_list, cv_RMSE_list,Predictions_Val_List, Predictions_Val_RMSE_List )
+#Set alpha range
+alpha_set = [10]# I used 10 as the first value because the output alpha should then say 1 instead of 0. but since it didn't there is a problem with variable e, I think.
+for b in range(200):
+  if b<10:
+    alpha = (b+1)/10
+    alpha_set.append(alpha)
+  else:
+    alpha_set.append((b/100))
+print("Alpha set", alpha_set)
+
+
+noise_set = [2]
+for x in noise_set:
+  #Callibration set up
+  RMSE_C_List = []
+  random.seed(10)
+  np.random.seed(seed=10)
+  noise_value= x
+  data = []
+  a_range = [1,2,3,5,7]
+  for a in a_range:
+    for x in range(101):
+      m = random.randint(1, 10)
+      ma = m * a
+      m2a = (m**2)*a
+      ma2 = m* (a**2)
+      ma_noise=m * a +noise_value*np.random.normal(0, 1, 1)[0]
+      d = {'m': m, 'a': a, 'ma': ma, 'm2a': m2a, 'ma2': ma2, 'Y' : ma_noise}
+      data.append(d)
+  df = pd.DataFrame(data)
+  df
+  features = ['m', 'a','ma', 'm2a', 'ma2']
+  X = df[features]
+  Y = df['Y']
+
+  X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.2)
+  #Prediction set up
+  data_val = []
+  a_range = [8,9]
+  for a in a_range:
+    for x in range(100):
+      m = random.randint(1, 10)
+      ma_val = m * a
+      ma_val_noise=m * a +noise_value*np.random.normal(0, 1, 1)[0]
+      d = {'m': m, 'a': a, 'ma': ma_val, 'm2a': m2a, 'ma2': ma2, 'Y' : ma_val_noise}
+      data_val.append(d)
+
+  df_val = pd.DataFrame(data_val)
+  df_val
+  features_val = ['m', 'a','ma', 'm2a', 'ma2']
+  X_val = df_val[features_val]
+  Y_val = df_val['Y']
+
+#Run all models
+  all_model = model_run(X_train, X_test, y_train, y_test, X, Y,X_val, Y_val)
+  print("All Model", all_model[0], all_model[1], all_model[2], all_model[3], all_model[4], all_model[5])
+#combine to make table
+combined_list = list(zip(all_model[0], all_model[1], all_model[2], all_model[3], all_model[4], all_model[5]))
+df_output = pd.DataFrame(combined_list)
+df_output
